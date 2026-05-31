@@ -40,12 +40,22 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       setWelcome(greet);
       setTimeout(() => onLoginSuccess(user), 1600);
     } catch (err: unknown) {
-      const msg =
-        err && typeof err === "object" && "code" in err
-          ? (err as { code: string }).code === "auth/invalid-credential"
-            ? "Invalid email or password"
-            : (err as { message?: string }).message || "Login failed"
-          : "Something went wrong. Try again.";
+      console.error("Login error:", err);
+      let msg = "Something went wrong. Try again.";
+      if (err instanceof Error && err.message) {
+        msg = err.message;
+      } else if (err && typeof err === "object") {
+        const e = err as { code?: string; message?: string };
+        if (e.code === "auth/invalid-credential" || e.code === "auth/wrong-password") {
+          msg = "Invalid email or password";
+        } else if (e.code === "auth/unauthorized-domain") {
+          msg = "Add this site in Firebase → Authentication → Authorized domains";
+        } else if (e.message) {
+          msg = e.message;
+        } else if (e.code) {
+          msg = e.code.replace("auth/", "").replace(/-/g, " ");
+        }
+      }
       setError(msg);
       setIsLoading(false);
     }
