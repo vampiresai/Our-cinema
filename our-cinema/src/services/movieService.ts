@@ -3,7 +3,7 @@ import { getRtdb } from "../firebase";
 import { apiUrl, hasLocalMediaServer } from "../config/api";
 import { Movie, Review, User, Episode } from "../types";
 
-const CHUNK_SIZE = 4 * 1024 * 1024;
+const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB — safer on Render free tier (512 MB RAM, request timeouts)
 
 const LOCAL_MSG =
   "Uploads need the full app server. Use your Render URL (e.g. your-app.onrender.com), not Firebase Hosting. Or run npm run dev locally.";
@@ -128,11 +128,13 @@ async function postBinary(url: string, data: ArrayBuffer): Promise<{ ok: boolean
   try {
     parsed = raw ? JSON.parse(raw) : {};
   } catch {
-    throw new Error(
-      res.ok
-        ? "Upload failed — server returned HTML instead of JSON. Use http://localhost:3000 with npm run dev"
-        : `Upload failed (HTTP ${res.status}). Is npm run dev running?`
-    );
+    const hint =
+      res.status === 502
+        ? "Server timed out or restarted (common on Render free tier with large files). Wait 30s, refresh, try a smaller file first."
+        : res.status === 503
+          ? "Server is waking up — wait a minute and try again."
+          : `Upload failed (HTTP ${res.status}). Check the app is running on Render.`;
+    throw new Error(res.ok ? "Upload failed — invalid server response" : hint);
   }
   return { ok: res.ok, status: res.status, data: parsed };
 }
