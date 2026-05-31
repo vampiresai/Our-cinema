@@ -46,10 +46,29 @@ function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-function clearPartialChunks(key: string): void {
+function partPathFor(relPath: string): string {
+  return path.join(UPLOADS_DIR, `${relPath}.part`);
+}
+
+function relPathForUpload(
+  movieId: string,
+  fileName: string,
+  epNum: number | undefined
+): string {
+  const ext = (fileName.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
+  if (epNum !== undefined && !isNaN(epNum)) {
+    ensureDir(path.join(UPLOADS_DIR, movieId));
+    return `${movieId}/ep${epNum}.${ext}`;
+  }
+  return `${movieId}.${ext}`;
+}
+
+function clearPartialUpload(relPath: string): void {
+  const part = partPathFor(relPath);
+  if (fs.existsSync(part)) fs.unlinkSync(part);
   ensureDir(chunkDir);
   for (const name of fs.readdirSync(chunkDir)) {
-    if (name.startsWith(`${key}_chunk_`)) {
+    if (name.startsWith(`${relPath.replace(/[/\\]/g, "_")}_chunk_`)) {
       try {
         fs.unlinkSync(path.join(chunkDir, name));
       } catch {
@@ -94,49 +113,45 @@ app.post("/api/upload-chunk", uploadBody, (req, res) => {
     return;
   }
 
-  const key = epNum !== undefined && !isNaN(epNum) ? `${movieId}_ep${epNum}` : movieId;
-  if (ci === 0) clearPartialChunks(key);
+  const relPath = relPathForUpload(movieId, fileName, epNum);
+  const finalPath = path.join(UPLOADS_DIR, relPath);
+  const partPath = partPathFor(relPath);
+
+  if (ci === 0) clearPartialUpload(relPath);
 
   try {
-    ensureDir(chunkDir);
-    fs.writeFileSync(path.join(chunkDir, `${key}_chunk_${ci}`), req.body);
+    ensureDir(UPLOADS_DIR);
+    if (ci === 0) {
+      fs.writeFileSync(partPath, req.body);
+    } else {
+      if (!fs.existsSync(partPath)) {
+        res.status(400).json({ error: "Upload interrupted — please start again" });
+        return;
+      }
+      fs.appendFileSync(partPath, req.body);
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.error("[chunk] write error:", msg);
     res.status(500).json({ error: `Failed to save chunk: ${msg}` });
     return;
   }
 
-  const allPresent = Array.from({ length: tc }, (_, i) =>
-    fs.existsSync(path.join(chunkDir, `${key}_chunk_${i}`))
-  ).every(Boolean);
-
-  if (!allPresent) {
+  const isLast = ci === tc - 1;
+  if (!isLast) {
     res.json({ completed: false });
     return;
   }
 
-  const ext = (fileName.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
-  let relPath: string;
-  if (epNum !== undefined && !isNaN(epNum)) {
-    ensureDir(path.join(UPLOADS_DIR, movieId));
-    relPath = `${movieId}/ep${epNum}.${ext}`;
-  } else {
-    relPath = `${movieId}.${ext}`;
-  }
-  const finalPath = path.join(UPLOADS_DIR, relPath);
-
   try {
-    const out = fs.openSync(finalPath, "w");
-    for (let i = 0; i < tc; i++) {
-      const cPath = path.join(chunkDir, `${key}_chunk_${i}`);
-      fs.writeSync(out, fs.readFileSync(cPath));
-      fs.unlinkSync(cPath);
-    }
-    fs.closeSync(out);
+    if (fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
+    fs.renameSync(partPath, finalPath);
+    console.log(`[upload] complete: ${relPath}`);
     res.json({ completed: true, filePath: relPath });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Failed to merge chunks: ${msg}` });
+    console.error("[chunk] finalize error:", msg);
+    res.status(500).json({ error: `Failed to finalize upload: ${msg}` });
   }
 });
 
