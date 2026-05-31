@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isUploader() {
+      return isSignedIn()
+        && request.auth.token.email == 'sahil.ramesar@gmail.com';
+    }
+
+    // Video files (movies and episodes)
+    match /movies/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isUploader();
+    }
+
+    // Cover / poster images
+    match /covers/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isUploader();
+    }
+
+    // Deny everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

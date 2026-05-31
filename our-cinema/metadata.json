@@ -1,0 +1,6 @@
+{
+  "name": "Our Cinema",
+  "description": "A premium private movie streaming platform with synchronized playback, live chat, and voice connection designed for couples.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

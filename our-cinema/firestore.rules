@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isUploader() {
+      return isSignedIn() && request.auth.token.email == 'sahil.ramesar27@gmail.com';
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /movies/{movieId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isUploader();
+    }
+
+    match /stats/global {
+      allow read, write: if isSignedIn();
+    }
+
+    match /watchHistory/{itemId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /rooms/{roomId}/messages/{messageId} {
+      allow read, create: if isSignedIn();
+    }
+  }
+}

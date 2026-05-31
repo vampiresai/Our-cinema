@@ -1,0 +1,38 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "movies": {
+      ".read": "auth != null",
+      "$movieId": {
+        ".write": "auth != null && auth.token.email === 'sahil.ramesar@gmail.com'",
+        "likes": {
+          ".write": "auth != null"
+        },
+        "reviews": {
+          ".write": "auth != null"
+        }
+      }
+    },
+    "stats": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "watchHistory": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "rooms": {
+      "$roomId": {
+        "messages": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    }
+  }
+}
