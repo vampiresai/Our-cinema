@@ -22,9 +22,8 @@ export async function ensureUserProfile(fbUser: FirebaseUser): Promise<User> {
   const userRef = ref(getRtdb(), `users/${fbUser.uid}`);
   const snap = await get(userRef);
 
-  await update(userRef, { lastActive: Date.now() });
-
   if (snap.exists()) {
+    await update(userRef, { lastActive: Date.now() });
     const data = snap.val() as Record<string, string>;
     return {
       id: fbUser.uid,
@@ -57,7 +56,7 @@ export async function ensureUserProfile(fbUser: FirebaseUser): Promise<User> {
 }
 
 export async function loginWithEmail(email: string, password: string, displayName?: string): Promise<User> {
-  const cred = await signInWithEmailAndPassword(auth, email, password);
+  const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
   const profile = await ensureUserProfile(cred.user);
   if (displayName) {
     const userRef = ref(getRtdb(), `users/${cred.user.uid}`);
@@ -80,7 +79,8 @@ export function subscribeToAuth(callback: (user: User | null) => void): () => vo
     try {
       const profile = await ensureUserProfile(fbUser);
       callback(profile);
-    } catch {
+    } catch (err) {
+      console.error("Auth profile error:", err);
       callback(null);
     }
   });
